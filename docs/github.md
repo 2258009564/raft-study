@@ -1,6 +1,6 @@
 # GitHub 发布与面试官访问
 
-本地已经分成两个独立仓库：`raft-study` 是公开文档版；`raft-study-private` 是完整代码版。二者都有自己的 Git 历史，原 MIT 仓库未改变。
+本地统一位于 D:\Desktop\Raft：public-notes 是公开文档版；project 是完整代码版。它们分别对应 raft-study 和 raft-study-private 两个 GitHub 仓库。二者都有自己的 Git 历史，原 MIT 仓库未改变。
 
 ## 发布步骤
 
@@ -8,8 +8,8 @@ GitHub CLI 当前未登录，无法自动创建远程仓库。完成账号登录
 
 ```powershell
 gh auth login
-gh repo create raft-study --public --source D:\Desktop\raft-study --remote origin --push
-gh repo create raft-study-private --private --source D:\Desktop\raft-study-private --remote origin --push
+gh repo create raft-study --public --source D:\Desktop\Raft\public-notes --remote origin --push
+gh repo create raft-study-private --private --source D:\Desktop\Raft\project --remote origin --push
 ```
 
 若已有同名远程仓库，先检查该仓库的内容和可见性，不要覆盖或强制推送。
