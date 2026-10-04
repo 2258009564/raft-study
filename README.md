@@ -360,3 +360,5 @@ wsl -d Ubuntu-24.04 -- bash -lc 'cd /mnt/d/Desktop/Raft/project/src && go test -
 ## 15. 真实工程案例
 
 [案例001：乱序网络中的日志追赶超时与冲突回退优化](docs/engineering-cases.md)记录首次失败、具体消息时间线、Go导出与下标边界、修改范围和重复验收，可用于面试中的项目问题复盘。今后追加真实发生且经过验证的改进，不将推测写成实测结果。
+
+另外整理了[案例002：重复加锁与锁责任](docs/engineering-cases.md#case-002)，以及[案例003：乱序RPC回复与复制进度保护](docs/engineering-cases.md#case-003)。前者是真实代码修错，后者是主动设计与反例验证，分别保留证据和面试回答。
