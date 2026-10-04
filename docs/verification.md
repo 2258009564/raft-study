@@ -1,4 +1,4 @@
-# 3A 验收记录
+# 3A / 3B 验收记录
 
 验证日期：2026-10-04（Asia/Shanghai）。验证位置：独立整理后的完整私有版；不是原目录的历史结果。
 
@@ -26,11 +26,45 @@
 
 ## 证据边界
 
-以上是 MIT 官方 Go 3A 和自编辅助 Go 测试；不包含 C++ 测试，也不代表 3B、3C、3D 通过。这是一次完整运行，不声明长时间压测或无限故障情形的正确性。
+以上这一节是整理时的 MIT 官方 Go 3A 和自编辅助 Go 测试历史记录；当时不包含 3B。后续 3B 与联合回归证据见下节。均不包含 C++ 测试，不声明长时间压测或无限故障情形的正确性。
 
 整理版 raft.go 的 SHA-256：78B5D6A80659DF5096409378450BF4FB13B290ABDB575D4749EB1F7685FEEEC5
 
-该摘要对应整理后的源码；公开仓库不附带实验解答源码。
+该摘要对应当时整理后的 3A 源码，并非当前 3B 版本；公开仓库不附带实验解答源码。
+
+## 3B 学习者运行结果（2026-10-04）
+
+学习者自行运行官方 TestBasicAgree3B，开启 -race，完整输出确认 PASS，测试耗时1.45s，包总耗时2.470s。随后运行全部官方3B，并提供结尾 `PASS`、`ok 6.5840/raft1 74.452s`。全套逐项日志未在该次用户消息中提供，因此不为这一次填写各项耗时。
+
+## 最新官方与辅助联合回归（2026-10-04）
+
+学习者明确授权 Codex 代跑收尾回归。环境为 WSL Ubuntu-24.04，先以 -race 编译节点进程，再执行：
+
+```powershell
+wsl -d Ubuntu-24.04 -- bash -lc 'cd /mnt/d/Desktop/Raft/project && make build && cd src/raft1 && go test -v -race -run "3A|3B|^TestGuided" -count=1 -timeout=300s'
+```
+
+| MIT 官方测试 | 结果 | 测试耗时 |
+| --- | --- | --- |
+| TestInitialElection3A | PASS | 3.81s |
+| TestReElection3A | PASS | 6.15s |
+| TestManyElections3A | PASS | 7.14s |
+| TestBasicAgree3B | PASS | 1.40s |
+| TestRPCBytes3B | PASS | 3.04s |
+| TestFollowerFailure3B | PASS | 5.33s |
+| TestLeaderFailure3B | PASS | 5.90s |
+| TestFailAgree3B | PASS | 5.19s |
+| TestFailNoAgree3B | PASS | 4.59s |
+| TestConcurrentStarts3B | PASS | 1.44s |
+| TestRejoin3B | PASS | 7.19s |
+| TestBackup3B | PASS | 35.53s |
+| TestCount3B | PASS | 3.01s |
+
+另外20个顶层辅助测试（旧选举/心跳11个、3B新增9个）全部PASS。整体输出 `PASS`、`ok 6.5840/raft1 90.890s`，未报告数据竞争。这里的90.890s是官方与辅助联合运行总耗时，不是单独3B耗时。
+
+新增辅助测试覆盖：哨兵初始化、Start本地追加、投票日志新旧、接收端冲突/缺失/迟到请求、领导者初始化、请求连接点与独立复制、回复乱序与任期、多数派提交、应用顺序与通道阻塞不占锁。它们由Codex编写，不是MIT官方测试，也不构成协议形式化证明。
+
+收尾修复了旧辅助测试手工构造节点缺少日志哨兵、领导者复制进度的问题：使夹具满足新版初始化约定，断言保留，未修改协议算法或官方测试。源码收尾只整理注释，保持非注释代码与回归前一致。3C、3D未运行且未实现；3A、3B各一轮回归通过，不宣称反复压力测试或生产安全认证。
 
 ## 同步工具核查（2026-10-04）
 
