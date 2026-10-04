@@ -1,6 +1,6 @@
 # Raft 核心实现与学习项目
 
-这是我从零学习 Go 并逐步实现 Raft 的项目，目标覆盖 MIT 6.5840 2026 Lab 3A～3D 的选举、日志复制、持久化和快照。当前已完成 3A 和 3B 的实现，官方3A、3B与20个辅助测试的最新 -race 联合回归全部通过；结果见测试记录。下一阶段是 3C 持久化。
+这是我从零学习 Go 并逐步实现 Raft 的项目，目标覆盖 MIT 6.5840 2026 Lab 3A～3D 的选举、日志复制、持久化和快照。当前已完成 3A、3B 和 3C；最新 -race 回归通过21项官方测试，另有25项辅助测试通过。下一阶段是3D快照；结果见测试记录。
 
 本公开目录保存项目说明和复习文档，不包含实验源码；完整代码位于同级 project 目录，供本地和私有仓库使用。原来的 C++ 练习继续保留。[MIT 协作政策](https://pdos.csail.mit.edu/6.824/labs/collab.html)要求含实验实现的 GitHub 仓库设为私有。
 
@@ -12,10 +12,10 @@ Lab 3A 的目标是：正常网络中选出领导者并保持稳定；旧领导�
 | --- | --- | --- |
 | 3A | 任期、投票、选举、心跳与后台计时 | 已实现，验收结果见测试记录 |
 | 3B | 日志复制、冲突修复、多数派提交与顺序交付 | 已实现，官方 3B 通过；最新回归见测试记录 |
-| 3C | 任期、投票和日志的保存与恢复 | 未实现 |
+| 3C | 任期、投票和日志的保存与恢复 | 已实现，官方3C通过；包含冲突回退优化 |
 | 3D | 快照与日志压缩 | 未实现 |
 
-3A、3B 覆盖选举与内存中的日志共识；3C 持久化和 3D 快照尚未实现，不能据此声称完成崩溃恢复、生产级 Raft 或容错 KV 服务。
+3A～3C覆盖选举、日志共识及实验保存容器中的重启恢复；3D快照尚未实现，不能据此声称完成生产磁盘引擎、生产级Raft或容错KV服务。
 
 ## 项目目标与阶段记录
 
@@ -41,7 +41,9 @@ Lab 3A 的目标是：正常网络中选出领导者并保持稳定；旧领导�
 | 2026-10-04 | 完成 3A：领导者选举与心跳 | 原目录自行运行测试并报告通过；整理版再次通过三个官方 3A 测试及 11 组辅助测试，开启 -race。Go 语法、接口、部分发送函数和测试由 Codex 辅助；不是全部源码均独立编写。 |
 | 2026-10-04 | 完成 3B：日志复制、冲突修复、提交与顺序交付 | 学习者在指导下编写核心逻辑，自行运行官方基础一致性与全部 3B，报告 PASS，完整 3B 包耗时 74.452s。Codex 提供注释、Go 语法讲解、局部修正方向和辅助测试；最新回归结果见 docs/verification.md。 |
 
-下一阶段是 3C：持久化与重启恢复。继续由学习者编写核心逻辑；默认由学习者运行测试，助手提供命令和结果分析，明确授权代跑时例外。
+| 2026-10-05 | 完成3C持久化与冲突回退优化 | 学习者在指导下编写核心逻辑；21项官方3A/3B/3C与25项辅助测试开启-race通过，原故障场景修正后5次通过。详见测试记录与工程案例。 |
+
+下一阶段是3D：快照与日志压缩。继续由学习者编写核心逻辑；默认由学习者运行测试，助手提供命令和结果分析，明确授权代跑时例外。
 
 ## 2. 文件怎样分工
 
@@ -52,7 +54,9 @@ Lab 3A 的目标是：正常网络中选出领导者并保持稳定；旧领导�
 | `src/raft1/raft.go` | 在官方骨架上练习实现的 Raft 节点，包含中文说明 |
 | `src/raft1/guided_state_test.go` | Codex 辅助编写的针对性 Go 测试 |
 | `src/raft1/guided_log_test.go` | Codex 编写的 9 个 3B 辅助测试，检查局部行为与边界 |
-| `src/raft1/raft_test.go` | MIT 官方实验测试，包含 3A～3D；当前验收 3A、3B |
+| `src/raft1/guided_persist_test.go` | Codex编写的3项保存、投票重启与恢复辅助测试 |
+| `src/raft1/guided_conflict_test.go` | Codex编写的2项冲突提示、RPC编码与过时回复辅助测试 |
+| `src/raft1/raft_test.go` | MIT 官方实验测试，包含 3A～3D；当前验收3A、3B、3C |
 | `src/raft1/test.go`、`server.go`、`proxy.go`、`util.go` | 官方测试封装与节点运行支持 |
 | `src/raftapi/` | 测试器和服务层要求 Raft 提供的接口 |
 | `src/labrpc/` | 官方模拟网络，可延迟、丢失请求或回复 |
@@ -96,7 +100,7 @@ Go 中这里使用结构体及方法，没有额外设计一个 C++ 风格的 cl
 | `VoteRequestMessage` | 待发送请求的本地信封 | `From`、`To`、`Args` |
 | `VoteReplyMessage` | 将原请求信息与实际回复关联 | `From`、`To`、`RequestTerm`、`Resp` |
 | `AppendEntriesArgs` | 日志复制或空心跳正文 | `Term`、`LeaderId`、`PrevLogIndex`、`PrevLogTerm`、`Entries`、`LeaderCommit` |
-| `AppendEntriesReply` | 本次日志请求的答复 | `Term`、`Success`；不代表已经提交 |
+| `AppendEntriesReply` | 本次日志请求的答复 | `Term`、`Success`、失败时的发送起点提示`Nxtbgidx`；不代表已经提交 |
 
 `Raft` 中的字段：
 
@@ -105,7 +109,7 @@ Go 中这里使用结构体及方法，没有额外设计一个 C++ 风格的 cl
 | `mu` | 互斥锁，保护可能被多个协程同时访问的状态 |
 | `peers` | 固定集群的通信端点，包含自己，断网不改变人数 |
 | `me` | 本节点在 peers 中的下标 |
-| `persister` | 官方保存容器，3C 再实现实际保存逻辑 |
+| `persister` | 官方保存容器，保存编码后的任期、投票与日志，重启时读取 |
 | `currentTerm` | 本节点目前知道的最大任期 |
 | `votedFor` | 本任期投给的候选人编号；-1 表示未投票 |
 | `role` | 当前身份 |
@@ -147,9 +151,9 @@ Go 中这里使用结构体及方法，没有额外设计一个 C++ 风格的 cl
 | `handleAppendEntriesReply` | 关联原请求与回复，处理任期、推进或回退复制进度 | 成功后检查多数派提交，忽略过时回复 | 自行加锁 |
 | `advanceCommitIndexLocked` | 找出当前任期已达多数派的最远位置 | 推进 commitIndex，旧前缀随之提交 | 调用者持锁 |
 | `applier` | 唯一应用协程，按位置交付已提交命令 | 经 applyCh 发送，再推进 lastApplied | 锁内取消息，锁外发送，锁内记录 |
-| `persist` | 3C 在任期、投票或日志变化后保存状态 | 编码后交给保存容器；当前占位 | 计划由持锁调用者使用 |
-| `readPersist` | 3C 创建节点时恢复先前保存的数据 | 恢复任期、投票和日志；当前占位 | 计划在启动后台任务前执行 |
-| `PersistBytes` | 查询已保存状态的大小 | 当前占位返回值，不代表真实保存大小 | 后续实现时保护访问 |
+| `persist` | 3C 在任期、投票或日志变化后保存状态 | 按固定顺序编码后统一保存 | 调用者持锁 |
+| `readPersist` | 3C 创建节点时恢复先前保存的数据 | 完整解码到临时变量后恢复三项状态 | 启动后台任务前执行 |
+| `PersistBytes` | 查询已保存状态的大小 | 返回官方容器中已保存状态的字节数 | 容器自行加锁 |
 | `Snapshot` | 3D 接收服务层快照并压缩日志 | 当前占位 | 当前未实现 |
 
 ## 6. 正常消息时间线
@@ -219,7 +223,7 @@ make test-guided
 
 官方仓库的 origin 是 MIT 的上游地址，不是自己的 GitHub。公开笔记版采用独立 Git 仓库，不携带原项目的 .git 和历史；不会把整个混杂的学习工作区上传。发布与面试官访问方式见 [GitHub 说明](docs/github.md)。完整实验代码可以另建私有仓库保存。
 
-对外描述应使用“基于 MIT 官方骨架完成 Lab 3A/3B 的选举、日志复制、冲突修复、提交与顺序交付，包含 Go 语法和测试辅助”，不要将官方测试器、通信库或者辅助完成部分描述为完全独立开发。参考来源见 [来源说明](docs/sources.md)。
+对外描述应使用“基于 MIT 官方骨架完成Lab 3A～3C的选举、日志复制、冲突修复、提交、顺序交付与持久化恢复，包含 Go 语法和测试辅助”，不要将官方测试器、通信库或者辅助完成部分描述为完全独立开发。参考来源见 [来源说明](docs/sources.md)。
 
 
 ## 12. 3B 完整链路与复习顺序
@@ -338,17 +342,21 @@ Go 的 `range` 可以取元素，但元素变量是副本，修改它不会写�
 
 要看这个字段是否可能被其他协程修改，不能只看有没有 `rf.`。可变共享状态读写都要持锁，固定配置可以直接读；需要保持一致的一组操作放在同一次加锁内，不是读一个字段锁一次。网络、通道和休眠在锁外；名字带 `Locked` 的辅助函数不再加锁，无限循环里的 `defer` 也不会在每轮结束时自动解锁。
 
-## 14. 3A/3B 复现命令与下一阶段
+## 14. 3A/3B/3C复现命令与下一阶段
 
 在 PowerShell 中执行（需要 WSL Ubuntu-24.04）：
 
 ```powershell
 # 官方基础一致性
 wsl -d Ubuntu-24.04 -- bash -lc 'cd /mnt/d/Desktop/Raft/project && make build && cd src/raft1 && go test -v -race -run "^TestBasicAgree3B$" -count=1 -timeout=120s'
-# 官方完整 3A、3B 回归
-wsl -d Ubuntu-24.04 -- bash -lc 'cd /mnt/d/Desktop/Raft/project && make build && cd src/raft1 && go test -v -race -run "3A|3B" -count=1 -timeout=300s'
+# 官方完整3A、3B、3C回归（排除自编辅助测试）
+wsl -d Ubuntu-24.04 -- bash -lc 'cd /mnt/d/Desktop/Raft/project && make build && cd src/raft1 && go test -v -race -run "^Test(InitialElection|ReElection|ManyElections|BasicAgree|RPCBytes|FollowerFailure|LeaderFailure|FailAgree|FailNoAgree|ConcurrentStarts|Rejoin|Backup|Count|Persist[123]|Figure8|UnreliableAgree|Figure8Unreliable|ReliableChurn|UnreliableChurn)3[ABC]$" -count=1 -timeout=600s'
 # 自编辅助 Go 测试，不能替代官方验收
 wsl -d Ubuntu-24.04 -- bash -lc 'cd /mnt/d/Desktop/Raft/project/src && go test -v -race ./raft1 -run "^TestGuided" -count=1 -timeout=60s'
 ```
 
-下一次从同一个 raft.go 的 persist、readPersist 与 Make 恢复路径开始规划3C。先理解需要跨重启保留的 currentTerm、votedFor、log，再决定编码、保存时机和恢复顺序；不要把尚未实现的持久化写成已完成。
+下一阶段从同一个raft.go规划3D：快照边界、压缩后的逻辑位置、快照保存与恢复，以及落后节点的快照安装；先梳理状态和时间线，再逐函数实现。
+
+## 15. 真实工程案例
+
+[案例001：乱序网络中的日志追赶超时与冲突回退优化](docs/engineering-cases.md)记录首次失败、具体消息时间线、Go导出与下标边界、修改范围和重复验收，可用于面试中的项目问题复盘。今后追加真实发生且经过验证的改进，不将推测写成实测结果。
