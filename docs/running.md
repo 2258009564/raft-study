@@ -21,7 +21,7 @@ wsl -d Ubuntu-24.04 -- bash -lc 'cd /mnt/d/Desktop/Raft/project/src && go test -
 
 ## Makefile入口
 
-在WSL的project目录中，make build只构建节点程序；make test构建并运行官方3A，不能将它的PASS当作3B或3C通过；make test-guided运行自编辅助测试。完整官方3A～3C使用上面的明确筛选命令。
+在WSL的project目录中，make build只构建节点程序；make test构建并运行官方3A，不能将它的PASS当作3B或3C通过；make test-guided运行自编辅助测试。完整官方3A～3D使用上面的明确筛选命令。
 
 旧cpp-raft和cpp-lab3属于另外的C++练习，保留在原目录，结果不计入官方Go验收。
 
@@ -40,3 +40,12 @@ cd D:\Desktop\Raft
 ```
 
 脚本不运行测试。完整代码上传到私有raft-study-private，公开raft-study只放文档；访问与发布细节见[GitHub说明](github.md)。旧MIT目录和C++练习没有删除，日常实现以project为准。
+
+## 官方3D与完整回归
+
+```powershell
+# 七项官方快照测试
+wsl -d Ubuntu-24.04 -- bash -lc 'cd /mnt/d/Desktop/Raft/project && make build && cd src/raft1 && go test -v -race -run "^TestSnapshot.*3D$" -count=1 -timeout=600s'
+# 官方3A～3D及全部辅助测试；结果须分别统计
+wsl -d Ubuntu-24.04 -- bash -lc 'cd /mnt/d/Desktop/Raft/project && make build && cd src/raft1 && go test -v -race -count=1 -timeout=900s'
+```

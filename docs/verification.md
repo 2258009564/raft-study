@@ -99,3 +99,56 @@ wsl -d Ubuntu-24.04 -- bash -lc 'cd /mnt/d/Desktop/Raft/project && make build &&
 | TestUnreliableChurn3C | PASS | 18.41s |
 
 官方测试来自raft_test.go，自编辅助测试来自guided_*_test.go，C++练习不计入以上Go验收。随后收尾仅修改注释与文档，未再修改协议逻辑。3D尚未实现；有限次随机测试通过不能证明所有故障轨迹正确，也不作为生产系统认证。
+
+
+## 3D本机快照阶段（2026-10-05 22:34，北京时间）
+
+学习者自行运行命令并提供完整输出：先gofmt与make build，随后两项Codex辅助测试TestGuidedLocalSnapshot3D、TestGuidedSnapshotAtEnd3D通过，包耗时1.023s；MIT官方TestSnapshotBasic3D通过，测试耗时7.71s，包耗时8.728s。均开启-race，输出未报告数据竞争。
+
+本阶段验证本机压缩路径，不代表远程InstallSnapshot或完整3D完成。其余六项官方3D尚未验收；修改索引后的完整3A～3C回归尚未重新运行。后续继续实现快照RPC与顺序交付。
+
+## 3D完整官方验收（2026-10-06）
+
+学习者自行运行并提供完整逐项输出；终端末尾显示00:35:10，日期按本次对话日期记录。命令先make build，再go test -v -race -run "^TestSnapshot.*3D$" -count=1 -timeout=600s。七项全部PASS，包耗时266.158s，未报告数据竞争。
+
+| MIT官方测试 | 结果 | 测试耗时 |
+| --- | --- | --- |
+| TestSnapshotBasic3D | PASS | 7.46s |
+| TestSnapshotInstall3D | PASS | 58.15s |
+| TestSnapshotInstallUnreliable3D | PASS | 73.90s |
+| TestSnapshotInstallCrash3D | PASS | 47.15s |
+| TestSnapshotInstallUnCrash3D | PASS | 52.68s |
+| TestSnapshotAllCrash3D | PASS | 20.40s |
+| TestSnapshotInit3D | PASS | 5.40s |
+
+这是完整3D单轮验收，不是多轮压力测试。前一节本机阶段的“未验收”是当时状态，已由本节更新。3D改动后的旧阶段回归另记，不能沿用10月5日的旧结果。
+
+## 3D改造后的旧阶段与辅助回归（2026-10-06）
+
+用户明确授权Codex代跑。先make build，再运行go test -v -race -run "3A|3B|3C|^TestGuided" -count=1 -timeout=600s。21项官方旧阶段测试和27项Codex辅助测试全部PASS，联合包耗时243.570s，未报告数据竞争。两项3D本机辅助测试包含在这27项中；七项官方3D另由用户运行，不混入本轮计数。go vet ./raft1及git diff --check通过。收尾仅整理源码注释与格式，没有代改核心算法。
+
+| 官方回归 | 结果 | 测试耗时 |
+| --- | --- | --- |
+| TestInitialElection3A | PASS | 3.81s |
+| TestReElection3A | PASS | 5.75s |
+| TestManyElections3A | PASS | 8.43s |
+| TestBasicAgree3B | PASS | 1.36s |
+| TestRPCBytes3B | PASS | 3.07s |
+| TestFollowerFailure3B | PASS | 5.37s |
+| TestLeaderFailure3B | PASS | 5.79s |
+| TestFailAgree3B | PASS | 4.80s |
+| TestFailNoAgree3B | PASS | 4.44s |
+| TestConcurrentStarts3B | PASS | 1.34s |
+| TestRejoin3B | PASS | 7.39s |
+| TestBackup3B | PASS | 28.87s |
+| TestCount3B | PASS | 2.98s |
+| TestPersist13C | PASS | 6.44s |
+| TestPersist23C | PASS | 19.81s |
+| TestPersist33C | PASS | 3.11s |
+| TestFigure83C | PASS | 47.99s |
+| TestUnreliableAgree3C | PASS | 6.91s |
+| TestFigure8Unreliable3C | PASS | 38.94s |
+| TestReliableChurn3C | PASS | 17.77s |
+| TestUnreliableChurn3C | PASS | 17.91s |
+
+3A～3D共28项官方测试在当前3D实现上分两次验收通过，不称一次全套运行；不包含C++测试，不称多轮压力测试。完整回归日志本地保留于project/.local/3d-closure-regression.log，不进入公开仓库。
